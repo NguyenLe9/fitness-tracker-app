@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <title>Fitness Progress Tracker</title>
+
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
   <div class="container">
     <h1>Fitness Progress Tracker</h1>
@@ -20,8 +22,10 @@
       {% endif %}
     {% endwith %}
 
+    <!-- ================== CALORIE GOAL ================== -->
     <section class="card">
       <h2>Calorie Goal</h2>
+
       <form method="post" action="{{ url_for('set_goal') }}" class="form-inline">
         <label for="calorie_goal">Daily calorie goal:</label>
         <input
@@ -35,36 +39,47 @@
         >
         <button type="submit">Save goal</button>
       </form>
+
       {% if calorie_goal %}
-        <p class="note">Current goal: <strong>{{ calorie_goal }}</strong> kcal/day</p>
+        <p class="note">
+          Current goal: <strong>{{ calorie_goal }}</strong> kcal/day
+        </p>
       {% endif %}
     </section>
 
+    <!-- ================== ADD ENTRY ================== -->
     <section class="card">
       <h2>Add Daily Entry</h2>
+
       <form method="post" action="{{ url_for('add_entry') }}" class="form-grid">
         <div>
           <label for="date">Date</label>
           <input type="date" name="date" id="date" required>
         </div>
+
         <div>
-          <label for="weight">Weight</label>
-          <input type="number" name="weight" id="weight" step="0.1" placeholder="kg">
+          <label for="weight">Weight (kg)</label>
+          <input type="number" name="weight" id="weight" step="0.1">
         </div>
+
         <div>
           <label for="calories">Calories</label>
-          <input type="number" name="calories" id="calories" step="10" placeholder="kcal">
+          <input type="number" name="calories" id="calories" step="10">
         </div>
+
         <div>
           <label for="steps">Steps</label>
-          <input type="number" name="steps" id="steps" step="100" placeholder="steps">
+          <input type="number" name="steps" id="steps" step="100">
         </div>
+
         <button type="submit" class="full-width">Add entry</button>
       </form>
     </section>
 
+    <!-- ================== RECENT ENTRIES ================== -->
     <section class="card">
       <h2>Recent Entries</h2>
+
       <div class="table-wrapper">
         <table>
           <thead>
@@ -76,21 +91,24 @@
               <th>Status</th>
             </tr>
           </thead>
+
           <tbody>
             {% for e in entries %}
-              {% set date_key = e.entry_date.strftime("%Y-%m-%d") %}
+              {% set date_key = e.entry_date|string %}
               {% set is_over = over_goal_flags.get(date_key, False) %}
-              <tr class="{% if calorie_goal and is_over %}over-goal{% endif %}">
+
+              <tr class="{% if is_over %}over-goal{% endif %}">
                 <td>{{ e.entry_date }}</td>
                 <td>{{ e.weight or "" }}</td>
                 <td>{{ e.calories or "" }}</td>
                 <td>{{ e.steps or "" }}</td>
-                <td>
-                  {% if calorie_goal and is_over %}
-                    Over goal
-                  {% else %}
-                    &nbsp;
-                  {% endif %}
+
+                <td class="
+                  {% if e.status == 'Over Goal' %}status-over
+                  {% elif e.status == 'Within Goal' %}status-within
+                  {% else %}status-na{% endif %}
+                ">
+                  {{ e.status }}
                 </td>
               </tr>
             {% endfor %}
@@ -99,12 +117,14 @@
       </div>
     </section>
 
+    <!-- ================== CHART ================== -->
     <section class="card">
-      <h2>Progress (Last 30 entries)</h2>
+      <h2>Progress (Last 30 Entries)</h2>
       <canvas id="fitnessChart" height="120"></canvas>
     </section>
   </div>
 
+  <!-- ================== CHART JS ================== -->
   <script>
     const labels = {{ chart_labels | tojson }};
     const weights = {{ chart_weights | tojson }};
@@ -113,13 +133,13 @@
 
     const ctx = document.getElementById('fitnessChart').getContext('2d');
 
-    const chart = new Chart(ctx, {
+    new Chart(ctx, {
       type: 'line',
       data: {
         labels: labels,
         datasets: [
           {
-            label: 'Weight',
+            label: 'Weight (kg)',
             data: weights,
             yAxisID: 'y1',
             borderWidth: 2,
@@ -151,7 +171,7 @@
           y1: {
             type: 'linear',
             position: 'left',
-            title: { display: true, text: 'Weight' }
+            title: { display: true, text: 'Weight (kg)' }
           },
           y2: {
             type: 'linear',

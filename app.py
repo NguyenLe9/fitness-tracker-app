@@ -12,23 +12,14 @@ app.secret_key = "super-secret-key-change-later"  # for flash messages
 # Use SQLite locally when LOCAL_DEV=1
 USE_SQLITE = os.getenv("LOCAL_DEV") == "1"
 
-def get_db_config():
-    return {
-        "host": os.getenv("DB_HOST"),
-        "user": os.getenv("DB_USER"),
-        "password": os.getenv("DB_PASSWORD"),
-        "database": os.getenv("DB_NAME"),
-    }
-
 
 def get_db_connection():
+    """Return a DB connection: SQLite for local dev, MySQL/MariaDB for AWS."""
     if USE_SQLITE:
-        # Local dev: use SQLite in a local file
         conn = sqlite3.connect("fitness_local.db")
-        conn.row_factory = sqlite3.Row  # so we can use dict-style access
+        conn.row_factory = sqlite3.Row  # dict-style access
         return conn
 
-    # AWS / real MySQL mode
     config = {
         "host": os.getenv("DB_HOST"),
         "user": os.getenv("DB_USER"),
@@ -42,6 +33,7 @@ def get_db_connection():
             "Check environment variables DB_HOST, DB_USER, DB_PASSWORD, DB_NAME."
         )
     return mysql.connector.connect(**config)
+
 
 def init_db():
     """Create tables if they don't exist."""
@@ -97,33 +89,6 @@ def init_db():
     cur.close()
     conn.close()
 
-    """Create tables if they don't exist."""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS fitness_entries (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            entry_date DATE NOT NULL,
-            weight DECIMAL(5,2),
-            calories INT,
-            steps INT
-        );
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS settings (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) UNIQUE NOT NULL,
-            value VARCHAR(255) NOT NULL
-        );
-        """
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
-
 
 @app.route("/", methods=["GET"])
 def index():
@@ -138,9 +103,11 @@ def index():
         # Get calorie goal
         cur.execute("SELECT value FROM settings WHERE name = 'calorie_goal'")
         row = cur.fetchone()
+
+        # row is sqlite3.Row or dict (MySQL cursor dict=True)
         calorie_goal = int(row["value"]) if row else None
 
-        # Get last 30 days of entries (most recent first)
+        # Get last 30 entries (most recent first)
         cur.execute(
             """
             SELECT entry_date, weight, calories, steps
@@ -151,7 +118,7 @@ def index():
         )
         entries = cur.fetchall()
 
-        # For SQLite, convert rows to plain dicts so the rest of the code/templates work the same
+        # For SQLite, convert rows to dicts so templates behave consistently
         if USE_SQLITE:
             entries = [dict(e) for e in entries]
 
@@ -162,14 +129,31 @@ def index():
     except Exception as e:
         return f"App error: {e}", 500
 
-    # Prepare over-goal flags and chart data
+    # ---------------------------
+    # Add per-entry status logic
+    # ---------------------------
+    # status = Over Goal / Within Goal (or N/A if no goal or calories)
+    if calorie_goal is not None:
+        for e in entries:
+            calories = e.get("calories")
+            if calories is None:
+                e["status"] = "N/A"
+            elif calories > calorie_goal:
+                e["status"] = "Over Goal"
+            else:
+                e["status"] = "Within Goal"
+    else:
+        for e in entries:
+            e["status"] = "N/A"
+
+    # Prepare flags and chart data
     over_goal_flags = {}
     chart_labels = []
     chart_weights = []
     chart_calories = []
     chart_steps = []
 
-    # reverse entries for chart (oldest first)
+    # Reverse entries for chart (oldest first)
     for e in reversed(entries):
         d = e["entry_date"]
         if isinstance(d, (datetime, date)):
@@ -187,10 +171,7 @@ def index():
             d = e["entry_date"]
             key = d.strftime("%Y-%m-%d") if isinstance(d, (datetime, date)) else str(d)
             is_over = e["calories"] is not None and e["calories"] > calorie_goal
-            if key not in over_goal_flags:
-                over_goal_flags[key] = is_over
-            else:
-                over_goal_flags[key] = over_goal_flags[key] or is_over
+            over_goal_flags[key] = over_goal_flags.get(key, False) or is_over
 
     return render_template(
         "index.html",
@@ -219,13 +200,24 @@ def add_entry():
 
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO fitness_entries (entry_date, weight, calories, steps)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (entry_date, weight, calories, steps),
-        )
+
+        if USE_SQLITE:
+            cur.execute(
+                """
+                INSERT INTO fitness_entries (entry_date, weight, calories, steps)
+                VALUES (?, ?, ?, ?)
+                """,
+                (entry_date, weight, calories, steps),
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO fitness_entries (entry_date, weight, calories, steps)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (entry_date, weight, calories, steps),
+            )
+
         conn.commit()
         cur.close()
         conn.close()
@@ -247,11 +239,20 @@ def set_goal():
 
         conn = get_db_connection()
         cur = conn.cursor()
+
         cur.execute("DELETE FROM settings WHERE name = 'calorie_goal'")
-        cur.execute(
-            "INSERT INTO settings (name, value) VALUES (%s, %s)",
-            ("calorie_goal", goal),
-        )
+
+        if USE_SQLITE:
+            cur.execute(
+                "INSERT INTO settings (name, value) VALUES (?, ?)",
+                ("calorie_goal", goal),
+            )
+        else:
+            cur.execute(
+                "INSERT INTO settings (name, value) VALUES (%s, %s)",
+                ("calorie_goal", goal),
+            )
+
         conn.commit()
         cur.close()
         conn.close()
@@ -274,6 +275,5 @@ def health():
 
 
 if __name__ == "__main__":
-    # Only run this way locally. In prod we use gunicorn.
     init_db()
     app.run(host="0.0.0.0", port=5000, debug=True)
