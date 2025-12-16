@@ -164,6 +164,13 @@
             borderWidth: 1,
             borderDash: [2, 4],
             pointRadius: 0,
+          },
+          {
+            label: 'Calorie Goal',
+            data: labels.map(() => {{ calorie_goal or "null" }}),
+            yAxisID: 'y2',
+            borderWidth: 2,
+            pointRadius: 0,
           }
         ]
       },
@@ -179,6 +186,7 @@
           },
           y2: {
             type: 'linear',
+            beginAtZero: true,
             position: 'right',
             title: { display: true, text: 'Calories / Steps' },
             grid: { drawOnChartArea: false }
