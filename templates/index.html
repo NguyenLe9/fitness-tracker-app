@@ -10,6 +10,10 @@
 
 <body>
   <div class="container">
+    <div class="hero-images">
+      <img src="{{ url_for('static', filename='photo1.jpg') }}" alt="Powerlifting photo 1">
+      <img src="{{ url_for('static', filename='photo2.jpg') }}" alt="Powerlifting photo 2">
+    </div>
     <h1>Fitness Progress Tracker</h1>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
