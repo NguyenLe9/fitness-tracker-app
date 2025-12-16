@@ -14,7 +14,6 @@ USE_SQLITE = os.getenv("LOCAL_DEV") == "1"
 
 
 def get_db_connection():
-    """Return a DB connection: SQLite for local dev, MySQL/MariaDB for AWS."""
     if USE_SQLITE:
         conn = sqlite3.connect("fitness_local.db")
         conn.row_factory = sqlite3.Row  # dict-style access
@@ -36,7 +35,6 @@ def get_db_connection():
 
 
 def init_db():
-    """Create tables if they don't exist."""
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -129,10 +127,6 @@ def index():
     except Exception as e:
         return f"App error: {e}", 500
 
-    # ---------------------------
-    # Add per-entry status logic
-    # ---------------------------
-    # status = Over Goal / Within Goal (or N/A if no goal or calories)
     if calorie_goal is not None:
         for e in entries:
             calories = e.get("calories")
@@ -187,7 +181,6 @@ def index():
 
 @app.route("/add", methods=["POST"])
 def add_entry():
-    """Add daily fitness entry."""
     try:
         entry_date = request.form.get("date")
         weight = request.form.get("weight") or None
@@ -265,7 +258,6 @@ def set_goal():
 
 @app.route("/health")
 def health():
-    """Simple health check for debugging."""
     try:
         conn = get_db_connection()
         conn.close()
