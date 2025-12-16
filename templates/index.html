@@ -98,15 +98,15 @@
 
           <tbody>
             {% for e in entries %}
-              {% set date_key = e.entry_date|string %}
-              {% set is_over = over_goal_flags.get(date_key, False) %}
-
-              <tr class="{% if is_over %}over-goal{% endif %}">
+              <tr class="
+                {% if e.status == 'Over Goal' %}row-over
+                {% elif e.status == 'Within Goal' %}row-within
+                {% endif %}
+              ">
                 <td>{{ e.entry_date }}</td>
                 <td>{{ e.weight or "" }}</td>
                 <td>{{ e.calories or "" }}</td>
                 <td>{{ e.steps or "" }}</td>
-
                 <td class="
                   {% if e.status == 'Over Goal' %}status-over
                   {% elif e.status == 'Within Goal' %}status-within
